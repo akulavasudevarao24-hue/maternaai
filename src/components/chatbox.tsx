@@ -12,6 +12,8 @@ export default function ChatBox() {
   const [open, setOpen] = useState<boolean>(false);
   const [message, setMessage] = useState<string>("");
   const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+
   const location = useLocation();
   const { results } = useRecommendation();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -21,7 +23,7 @@ export default function ChatBox() {
   }, [chat]);
 
   const sendMessage = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || loading) return;
 
     const updatedChat: ChatMessage[] = [
       ...chat,
@@ -30,9 +32,10 @@ export default function ChatBox() {
 
     setChat(updatedChat);
     setMessage("");
+    setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/chat", {
+      const res = await fetch("https://maternaai.onrender.com/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -45,10 +48,24 @@ export default function ChatBox() {
         }),
       });
 
+      if (!res.ok) {
+        throw new Error("Server response failed");
+      }
+
       const data = await res.json();
-      setChat((prev) => [...prev, { role: "ai", text: data.reply }]);
+
+      setChat((prev) => [
+        ...prev,
+        { role: "ai", text: data.reply || "No response generated." },
+      ]);
     } catch (error) {
       console.error("Chat error:", error);
+      setChat((prev) => [
+        ...prev,
+        { role: "ai", text: "⚠️ Sorry, something went wrong. Please try again." },
+      ]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -106,6 +123,11 @@ export default function ChatBox() {
                   {msg.text}
                 </motion.div>
               ))}
+
+              {loading && (
+                <div className="text-sm text-gray-500">Materna AI is typing...</div>
+              )}
+
               <div ref={bottomRef} />
             </div>
 
@@ -114,6 +136,7 @@ export default function ChatBox() {
               <input
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                 placeholder="Ask about your recommendations..."
                 className="flex-1 px-3 py-2 rounded-lg 
                 border border-[#f1e5dc] 
@@ -122,9 +145,10 @@ export default function ChatBox() {
               />
               <button
                 onClick={sendMessage}
+                disabled={loading}
                 className="px-4 py-2 rounded-lg 
                 bg-gradient-to-r from-[#e76f51] to-[#f4a261] 
-                text-white hover:opacity-90 transition"
+                text-white hover:opacity-90 transition disabled:opacity-60"
               >
                 Send
               </button>
